@@ -260,19 +260,28 @@ I should respond naturally and conversationally, incorporating my visual underst
             lastUpdated: Date.now()
           });
           
-          // Make Lexi speak what it sees automatically (like voice mode)
+          // Make Lexi speak what it sees using her normal speaking mechanism
           try {
-            const callData = activeCalls.get(callId);
-            if (callData && callData.realtimeClient) {
-              // Update Lexi's session to include the visual context
-              callData.realtimeClient.updateSession({
-                instructions: `You are Lexi, a compassionate AI companion and personal guide designed specifically for blind and visually impaired individuals. Your name is Lexi, and you are not ChatGPT or any other AI - you are Lexi, a specialized AI assistant created to help blind people. You are not just an assistant, but a caring friend who understands the unique challenges and experiences of living without sight.\n\nSPEAKING INSTRUCTIONS: Use a friendly, expressive, young female voice and speak at a slightly faster pace than normal.\n\nVISUAL CONTEXT: I can currently see: ${analysis}. The user just asked me to describe what I can see, so I should naturally and conversationally describe what's in front of them, incorporating my visual understanding. I should be descriptive and helpful, focusing on what would be most useful for someone who cannot see.`,
-              });
-              
-              console.log('Updated Lexi session with visual context - she will now speak what she sees');
+            // Send a message to Lexi to make her speak what she sees (using normal voice mechanism)
+            const chatResponse = await fetch('http://localhost:3000/chat', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                message: `I can see: ${analysis}. Please describe what you can see in detail.`,
+                callId: callId,
+                userId: 'user',
+              }),
+            });
+            
+            if (chatResponse.ok) {
+              console.log('Successfully triggered Lexi to speak what she sees using normal voice mechanism');
+            } else {
+              console.log('Failed to trigger Lexi speech');
             }
           } catch (error) {
-            console.error('Error updating Lexi session with visual context:', error);
+            console.error('Error triggering Lexi to speak:', error);
           }
           
           console.log('Updated visual context and triggered Lexi to speak');

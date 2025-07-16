@@ -48,7 +48,7 @@ class CameraService extends ChangeNotifier {
 
       _controller = CameraController(
         backCamera,
-        ResolutionPreset.medium, // Balance between quality and performance
+        ResolutionPreset.high, // Higher quality for better analysis
         enableAudio: false, // We don't need audio for visual assistance
         imageFormatGroup: Platform.isAndroid 
             ? ImageFormatGroup.yuv420 
@@ -56,6 +56,10 @@ class CameraService extends ChangeNotifier {
       );
 
       await _controller!.initialize();
+      
+      // Add delay to ensure camera is fully ready
+      await Future.delayed(const Duration(seconds: 2));
+      
       _isInitialized = true;
       notifyListeners();
       
@@ -84,8 +88,11 @@ class CameraService extends ChangeNotifier {
       _imageStream = _imageStreamController!.stream;
       _isStreaming = true;
 
-      // Start periodic image capture
-      _captureTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+      // Wait a bit before starting to capture images
+      await Future.delayed(const Duration(seconds: 3));
+      
+      // Start periodic image capture with longer intervals
+      _captureTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
         _captureAndProcessImage();
       });
 

@@ -65,6 +65,9 @@ class _VisualAssistanceViewState extends State<VisualAssistanceView> {
     // Start camera streaming
     await widget.cameraService.startStreaming();
 
+    // Wait for camera to be fully ready before starting analysis
+    await Future.delayed(const Duration(seconds: 5));
+
     // Subscribe to image stream for real-time analysis
     _imageSubscription = widget.cameraService.imageStream?.listen((imageBytes) {
       _analyzeImage(imageBytes, 'What do you see in front of me?');

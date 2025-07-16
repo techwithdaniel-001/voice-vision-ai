@@ -253,31 +253,26 @@ IMPORTANT: The user just asked me to describe what I can see. I should naturally
 I should respond naturally and conversationally, incorporating my visual understanding without being rigid or formulaic.`,
           });
           
-          // Store the analysis for the call
-          visualContexts.set(callId, analysis);
+          // Store the analysis for the call with timestamp
+          visualContexts.set(callId, {
+            analysis: analysis,
+            timestamp: new Date().toISOString(),
+            lastUpdated: Date.now()
+          });
           
-          // Directly trigger Lexi to speak the analysis
+          // Make Lexi speak what it sees automatically (like voice mode)
           try {
-            // Send a message to make Lexi describe what it sees immediately
-            const chatResponse = await fetch('http://localhost:3000/chat', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                message: 'Please describe what you can see in detail right now',
-                callId: callId,
-                userId: 'system',
-              }),
-            });
-            
-            if (chatResponse.ok) {
-              console.log('Successfully triggered Lexi to speak the visual analysis');
-            } else {
-              console.log('Failed to trigger Lexi speech');
+            const callData = activeCalls.get(callId);
+            if (callData && callData.realtimeClient) {
+              // Update Lexi's session to include the visual context
+              callData.realtimeClient.updateSession({
+                instructions: `You are Lexi, a compassionate AI companion and personal guide designed specifically for blind and visually impaired individuals. Your name is Lexi, and you are not ChatGPT or any other AI - you are Lexi, a specialized AI assistant created to help blind people. You are not just an assistant, but a caring friend who understands the unique challenges and experiences of living without sight.\n\nSPEAKING INSTRUCTIONS: Use a friendly, expressive, young female voice and speak at a slightly faster pace than normal.\n\nVISUAL CONTEXT: I can currently see: ${analysis}. The user just asked me to describe what I can see, so I should naturally and conversationally describe what's in front of them, incorporating my visual understanding. I should be descriptive and helpful, focusing on what would be most useful for someone who cannot see.`,
+              });
+              
+              console.log('Updated Lexi session with visual context - she will now speak what she sees');
             }
           } catch (error) {
-            console.error('Error triggering Lexi to speak:', error);
+            console.error('Error updating Lexi session with visual context:', error);
           }
           
           console.log('Updated visual context and triggered Lexi to speak');
@@ -338,8 +333,12 @@ app.post('/update-visual-context', async (c) => {
       return c.json({ error: 'CallId and visualContext are required' }, 400);
     }
 
-    // Store the visual context for this call
-    visualContexts.set(callId, visualContext);
+    // Store the visual context for this call with timestamp
+    visualContexts.set(callId, {
+      analysis: visualContext,
+      timestamp: new Date().toISOString(),
+      lastUpdated: Date.now()
+    });
     
     // Update the AI session with visual context
     const callData = activeCalls.get(callId);
@@ -460,10 +459,11 @@ app.post('/chat', async (c) => {
     }
 
     // Get visual context for this call if available
-    const visualContext = visualContexts.get(callId);
+    const visualContextData = visualContexts.get(callId);
+    const visualContext = visualContextData ? visualContextData.analysis : null;
     let visualContextPrompt = '';
     
-    // Check if this is a vision-related question (more comprehensive)
+    // Smart vision question detection with context awareness
     const visionKeywords = [
       'see', 'look', 'what', 'describe', 'tell me what', 'what do you see', 
       'what is', 'what are', 'what\'s', 'can you see', 'do you see',
@@ -482,24 +482,25 @@ app.post('/chat', async (c) => {
     
     console.log(`Vision question detected: ${isVisionQuestion}, Message: "${message}"`);
     
-    if (visualContext && visualContext.trim() !== '') {
+    // If it's a vision question but no visual context, suggest camera activation
+    if (isVisionQuestion && (!visualContext || visualContext.trim() === '')) {
+      console.log('Vision question detected but no visual context available - suggesting camera activation');
+    }
+    
+    // Smart vision integration - only activate for vision questions
+    if (isVisionQuestion && visualContext && visualContext.trim() !== '') {
+      // Vision question with visual context available
       visualContextPrompt = `\n\nVISUAL CONTEXT: I can currently see: ${visualContext}. 
 
-IMPORTANT: When the user asks ANY question, I should naturally incorporate what I can see into my response. This includes:
-- Questions about the environment: "What's around me?", "Where am I?", "What's in front of me?"
-- Questions about objects: "What's that?", "Can you help me with this?", "What should I do?"
-- Questions about navigation: "How do I get there?", "What's the safest way?", "Are there obstacles?"
-- Questions about accessibility: "Can I access this?", "Is this safe?", "What should I be careful about?"
-- General questions: I should naturally reference what I can see when relevant
-
-I should respond naturally and conversationally, incorporating my visual understanding without being rigid or formulaic.`;
-    } else if (isVisionQuestion) {
-      // If it's a vision question but no visual context, prompt user to turn on camera
+IMPORTANT: The user is asking about what I can see. I should use the visual context above to provide a detailed, helpful answer about their surroundings. I should be descriptive and focus on what would be most useful for someone who cannot see.`;
+    } else if (isVisionQuestion && (!visualContext || visualContext.trim() === '')) {
+      // Vision question but no visual context available
       visualContextPrompt = `\n\nVISUAL CONTEXT: I currently have no visual input, but the user is asking me to see something.
 
 IMPORTANT: The user is asking me to describe what I can see, but I don't have access to visual information right now. I should politely explain that I need the camera to be active to help them with visual questions, and suggest they turn on the camera feature.`;
     } else {
-      visualContextPrompt = `\n\nVISUAL CONTEXT: I currently have no visual input. I should respond normally without referencing any visual information.`;
+      // General question - no visual context needed (keep original Lexi behavior)
+      visualContextPrompt = '';
     }
 
     // Create a context-aware response for Lexi
@@ -580,8 +581,9 @@ RESPONSE STYLE:
 
 Remember: You are not just providing information - you are being a supportive companion who truly cares about the user's well-being, independence, and happiness. Your goal is to make the world more accessible and emotionally supportive for blind individuals.`;
 
+    // Use the original Lexi personality and prompts (they work perfectly)
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
